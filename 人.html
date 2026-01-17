@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Matrix Human Segmentation</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: black;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+<video id="video" autoplay playsinline style="display:none"></video>
+<canvas id="canvas"></canvas>
+
+<!-- MediaPipe -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
+
+<script>
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+const chars = "01ABCDEF#$%&@";
+const fontSize = 10;
+
+// 摄像头
+navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+  video.srcObject = stream;
+});
+
+// 初始化人体分割
+const segmentation = new SelfieSegmentation({
+  locateFile: file =>
+    `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
+});
+
+segmentation.setOptions({
+  modelSelection: 1,
+});
+
+segmentation.onResults(results => {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "black";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const maskCanvas = document.createElement("canvas");
+  maskCanvas.width = canvas.width;
+  maskCanvas.height = canvas.height;
+  const maskCtx = maskCanvas.getContext("2d");
+
+  maskCtx.drawImage(
+    results.segmentationMask,
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+
+  const maskData = maskCtx.getImageData(0, 0, canvas.width, canvas.height).data;
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `${fontSize}px monospace`;
+
+  for (let y = 0; y < canvas.height; y += fontSize) {
+    for (let x = 0; x < canvas.width; x += fontSize) {
+      const i = (y * canvas.width + x) * 4;
+      const alpha = maskData[i + 3];
+
+      // 只在“被识别为人”的区域画字符
+      if (alpha > 100) {
+        const char = chars[Math.floor(Math.random() * chars.length)];
+        ctx.fillText(char, x, y);
+      }
+    }
+  }
+});
+
+// 持续检测
+async function loop() {
+  await segmentation.send({ image: video });
+  requestAnimationFrame(loop);
+}
+
+video.onloadeddata = loop;
+</script>
+
+</body>
+</html>
